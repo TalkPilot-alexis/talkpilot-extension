@@ -10,7 +10,7 @@ class ContentScript {
         this.mediaRecorder = null;
         this.audioChunks = [];
         this.transcriptBuffer = '';
-        this.apiBaseUrl = 'https://talkpilot-extension-uc6a-5eijk63oi-talksenseai-3248s-projects.vercel.app/api';
+        this.apiBaseUrl = 'https://talkpilot-extension-uc6a.vercel.app/api';
         this.init();
     }
 
@@ -20,8 +20,11 @@ class ContentScript {
     }
 
     checkURLAndShowModal() {
+        console.log('TalkPilot: Checking URL:', window.location.href);
+        
         // Check if we've already shown the modal for this session
         if (this.hasShownModal) {
+            console.log('TalkPilot: Modal already shown, skipping');
             return;
         }
 
@@ -38,11 +41,16 @@ class ContentScript {
         ];
 
         const currentDomain = window.location.hostname;
+        console.log('TalkPilot: Current domain:', currentDomain);
+        
         const isVideoCallDomain = videoCallDomains.some(domain => 
             currentDomain.includes(domain) || currentDomain.endsWith(domain)
         );
 
+        console.log('TalkPilot: Is video call domain?', isVideoCallDomain);
+
         if (isVideoCallDomain) {
+            console.log('TalkPilot: Showing URL recognition modal');
             this.showURLRecognitionModal();
         }
     }
@@ -357,7 +365,6 @@ class ContentScript {
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
                     <button id="talkpilot-salesforce-crm-btn" style="background: #00A1E0; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">Sign in to Salesforce</button>
                     <button id="talkpilot-hubspot-crm-btn" style="background: #FF7A59; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">Sign in to HubSpot</button>
-                    <button id="talkpilot-crm-guest-btn" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">Continue as Guest</button>
                 </div>
             </div>
             
@@ -405,12 +412,6 @@ class ContentScript {
         });
 
         hubspotBtn.addEventListener('click', () => {
-        });
-
-        const guestBtn = modal.querySelector('#talkpilot-crm-guest-btn');
-        guestBtn.addEventListener('click', () => {
-            this.handleCRMGuest();
-        });
             this.handleCRMSignIn('hubspot');
         });
 
@@ -496,31 +497,6 @@ class ContentScript {
                 `;
             }
         }
-    }
-
-    handleCRMGuest() {
-        // Simulate successful CRM connection for guest
-        chrome.storage.local.set({
-            crmToken: 'guest_crm_token',
-            crmType: 'guest',
-            crmData: [
-                { id: 'guest1', name: 'Guest Lead 1', company: 'Demo Company' },
-                { id: 'guest2', name: 'Guest Lead 2', company: 'Test Corp' }
-            ]
-        }, () => {
-            // Show the leads section
-            const signinSection = document.getElementById('crm-signin-section');
-            const leadsSection = document.getElementById('crm-leads-section');
-            
-            if (signinSection populateLeadsDropdown(leads) {populateLeadsDropdown(leads) { leadsSection) {
-                signinSection.style.display = 'none';
-                leadsSection.style.display = 'block';
-                this.populateLeadsDropdown([
-                    { id: 'guest1', name: 'Guest Lead 1', company: 'Demo Company' },
-                    { id: 'guest2', name: 'Guest Lead 2', company: 'Test Corp' }
-                ]);
-            }
-        });
     }
 
     populateLeadsDropdown(leads) {
