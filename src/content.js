@@ -888,6 +888,11 @@ class ContentScript {
                 </div>
             </div>
 
+            <!-- Battle Card (initially hidden) -->
+            <div id="talkpilot-battle-card" style="position: absolute; bottom: 140px; left: 20px; right: 20px; display: none; z-index: 1000;">
+                <!-- Battle card content will be dynamically inserted here -->
+            </div>
+
             <!-- Chat Widget -->
             <div style="padding: 20px; border-top: 1px solid #eee;">
                 <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: 500; color: #333;">Ask AI Coach</label>
@@ -1290,10 +1295,106 @@ class ContentScript {
             if (data.transcript) {
                 this.transcriptBuffer += ' ' + data.transcript;
                 this.updateTranscriptDisplay(data.transcript);
+                
+                // Real-time AI analysis and playbook tracking
+                await this.analyzeConversation(data.transcript);
             }
             
         } catch (error) {
             console.error('Transcription error:', error);
+        }
+    }
+
+    async analyzeConversation(newTranscript) {
+        try {
+            // Get current context and playbook
+            const context = await this.getStoredContext();
+            const playbookSteps = this.getPlaybookSteps(context.selectedPlaybook || 'General Sales');
+            
+            // Analyze the new transcript for playbook progress and insights
+            const analysisResponse = await fetch(`${this.apiBaseUrl}/ai/analyze`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    transcript: newTranscript,
+                    fullTranscript: this.transcriptBuffer,
+                    context: context,
+                    playbookSteps: playbookSteps,
+                    currentProgress: this.getCurrentPlaybookProgress()
+                })
+            });
+
+            if (analysisResponse.ok) {
+                const analysis = await analysisResponse.json();
+                
+                // Update playbook progress
+                if (analysis.completedSteps && analysis.completedSteps.length > 0) {
+                    this.updatePlaybookProgress(analysis.completedSteps);
+                }
+                
+                // Show proactive battle cards
+                if (analysis.battleCard) {
+                    this.showBattleCard(analysis.battleCard);
+                }
+                
+                // Show proactive insights
+                if (analysis.insight) {
+                    this.showProactiveInsight(analysis.insight);
+                }
+            }
+        } catch (error) {
+            console.error('Conversation analysis error:', error);
+        }
+    }
+
+    getCurrentPlaybookProgress() {
+        const checkboxes = document.querySelectorAll('#talkpilot-incall-panel input[type="checkbox"]:checked');
+        return Array.from(checkboxes).map(cb => cb.id.replace('step-', ''));
+    }
+
+    updatePlaybookProgress(completedSteps) {
+        completedSteps.forEach(stepId => {
+            const checkbox = document.getElementById(`step-${stepId}`);
+            if (checkbox && !checkbox.checked) {
+                checkbox.checked = true;
+                this.toggleStepLabel(checkbox);
+                this.updateProgress();
+            }
+        });
+    }
+
+    showBattleCard(battleCard) {
+        const battleCardElement = document.getElementById('talkpilot-battle-card');
+        if (battleCardElement) {
+            battleCardElement.innerHTML = `
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px; border-radius: 8px; margin-bottom: 12px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">🎯 Battle Card</h4>
+                    <p style="margin: 0; font-size: 13px; line-height: 1.4;">${battleCard}</p>
+                </div>
+            `;
+            battleCardElement.style.display = 'block';
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                battleCardElement.style.display = 'none';
+            }, 10000);
+        }
+    }
+
+    showProactiveInsight(insight) {
+        const insightElement = document.getElementById('talkpilot-ai-insight');
+        const textElement = document.getElementById('talkpilot-insight-text');
+        
+        if (insightElement && textElement) {
+            textElement.textContent = insight;
+            insightElement.style.display = 'block';
+            
+            // Auto-hide after 15 seconds
+            setTimeout(() => {
+                insightElement.style.display = 'none';
+            }, 15000);
         }
     }
 
