@@ -370,6 +370,10 @@ class ContentScript {
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
                     <button id="talkpilot-salesforce-crm-btn" style="background: #00A1E0; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">Sign in to Salesforce</button>
                     <button id="talkpilot-hubspot-crm-btn" style="background: #FF7A59; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">Sign in to HubSpot</button>
+                    <div style="text-align: center; margin-top: 8px;">
+                        <span style="color: #666; font-size: 12px;">or</span>
+                    </div>
+                    <button id="talkpilot-crm-guest-btn" style="background: #f8f9fa; color: #666; border: 1px solid #ddd; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">Continue as Guest (Manual Entry)</button>
                 </div>
             </div>
             
@@ -418,6 +422,11 @@ class ContentScript {
 
         hubspotBtn.addEventListener('click', () => {
             this.handleCRMSignIn('hubspot');
+        });
+
+        const guestBtn = modal.querySelector('#talkpilot-crm-guest-btn');
+        guestBtn.addEventListener('click', () => {
+            this.handleCRMGuest();
         });
 
         nextBtn.addEventListener('click', () => {
@@ -569,6 +578,76 @@ class ContentScript {
         }
     }
 
+    handleCRMGuest() {
+        console.log('TalkPilot: User chose to continue as guest');
+        
+        // Show manual entry form
+        const signinSection = document.getElementById('crm-signin-section');
+        const leadsSection = document.getElementById('crm-leads-section');
+        
+        if (signinSection) {
+            signinSection.style.display = 'none';
+        }
+        
+        if (leadsSection) {
+            leadsSection.style.display = 'block';
+            
+            // Update the leads dropdown for manual entry
+            const leadsDropdown = document.getElementById('talkpilot-leads-dropdown');
+            if (leadsDropdown) {
+                leadsDropdown.innerHTML = `
+                    <option value="">Choose a lead...</option>
+                    <option value="manual-acme">Acme Corp</option>
+                    <option value="manual-globex">Globex Inc</option>
+                    <option value="manual-techstart">TechStart Solutions</option>
+                    <option value="manual-innovate">Innovate Labs</option>
+                    <option value="manual-future">Future Systems</option>
+                    <option value="manual-custom">Custom Lead (Enter Below)</option>
+                `;
+            }
+            
+            // Add custom lead input field
+            const prospectUrlInput = document.getElementById('talkpilot-prospect-url');
+            if (prospectUrlInput) {
+                const customLeadSection = document.createElement('div');
+                customLeadSection.id = 'custom-lead-section';
+                customLeadSection.style.display = 'none';
+                customLeadSection.style.marginBottom = '16px';
+                customLeadSection.innerHTML = `
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Custom Lead Information:</label>
+                    <input type="text" id="talkpilot-custom-lead-name" placeholder="Company Name" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; margin-bottom: 8px;">
+                    <input type="text" id="talkpilot-custom-lead-contact" placeholder="Contact Name" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; margin-bottom: 8px;">
+                    <input type="text" id="talkpilot-custom-lead-role" placeholder="Contact Role" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                `;
+                
+                prospectUrlInput.parentNode.insertBefore(customLeadSection, prospectUrlInput);
+                
+                // Add event listener for custom lead option
+                leadsDropdown.addEventListener('change', () => {
+                    const customSection = document.getElementById('custom-lead-section');
+                    if (leadsDropdown.value === 'manual-custom') {
+                        customSection.style.display = 'block';
+                    } else {
+                        customSection.style.display = 'none';
+                    }
+                });
+            }
+        }
+        
+        // Enable the Next button
+        const nextBtn = document.getElementById('talkpilot-crm-next-btn');
+        if (nextBtn) {
+            nextBtn.disabled = false;
+            nextBtn.style.opacity = '1';
+        }
+        
+        // Store guest mode in storage
+        chrome.storage.local.set({
+            crmMode: 'guest',
+            crmProvider: 'manual'
+        });
+    }
+
     populateLeadsDropdown(leads) {
         const dropdown = document.getElementById('talkpilot-leads-dropdown');
         if (dropdown) {
@@ -598,6 +677,45 @@ class ContentScript {
     }
 
     handleCRMNext() {
+        // Get selected lead and URL
+        const leadsDropdown = document.getElementById('talkpilot-leads-dropdown');
+        const prospectUrl = document.getElementById('talkpilot-prospect-url');
+        
+        let leadData = {
+            company: '',
+            contact: '',
+            role: ''
+        };
+        
+        if (leadsDropdown && leadsDropdown.value) {
+            if (leadsDropdown.value === 'manual-custom') {
+                // Get custom lead data
+                const customName = document.getElementById('talkpilot-custom-lead-name');
+                const customContact = document.getElementById('talkpilot-custom-lead-contact');
+                const customRole = document.getElementById('talkpilot-custom-lead-role');
+                
+                leadData = {
+                    company: customName ? customName.value : '',
+                    contact: customContact ? customContact.value : '',
+                    role: customRole ? customRole.value : ''
+                };
+            } else {
+                // Get predefined lead data
+                const selectedOption = leadsDropdown.options[leadsDropdown.selectedIndex];
+                leadData = {
+                    company: selectedOption.textContent,
+                    contact: 'Contact Name',
+                    role: 'Decision Maker'
+                };
+            }
+        }
+        
+        // Store lead data
+        chrome.storage.local.set({
+            selectedLead: leadData,
+            prospectUrl: prospectUrl ? prospectUrl.value : ''
+        });
+        
         // Close CRM modal
         this.closeCRMModal();
         
