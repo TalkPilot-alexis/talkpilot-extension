@@ -1,194 +1,65 @@
-// TalkPilot Popup Manager for Authentication
-class PopupManager {
+// Simplified TalkPilot Popup
+console.log('TalkPilot Extension: Popup script loaded');
+
+class Popup {
     constructor() {
         this.init();
     }
 
-    async init() {
-        await this.checkAuthStatus();
+    init() {
+        this.checkAuthStatus();
         this.setupEventListeners();
     }
 
-    async checkAuthStatus() {
-        try {
-            const result = await chrome.storage.local.get(['authToken', 'userEmail', 'userName', 'isGuest']);
-            const isSignedIn = result.authToken || result.isGuest;
-            
-            const statusDiv = document.getElementById('status');
-            const statusText = document.getElementById('status-text');
-            const userInfoDiv = document.getElementById('user-info');
-            const userEmailSpan = document.getElementById('user-email');
-            const signinGoogleBtn = document.getElementById('signin-google');
-            const signinMicrosoftBtn = document.getElementById('signin-microsoft');
-            const guestBtn = document.getElementById('guest-btn');
-            const openPanelBtn = document.getElementById('open-panel-btn');
-            const signoutBtn = document.getElementById('signout-btn');
-            
-            if (isSignedIn) {
-                if (result.isGuest) {
-                    statusDiv.className = 'status guest';
-                    statusText.textContent = 'Guest Mode Active';
-                    userEmailSpan.textContent = 'Guest User';
-                } else {
-                    statusDiv.className = 'status signed-in';
-                    statusText.textContent = 'Signed In';
-                    userEmailSpan.textContent = result.userEmail || result.userName || 'Unknown User';
-                }
-                
-                userInfoDiv.style.display = 'block';
-                signinGoogleBtn.style.display = 'none';
-                signinMicrosoftBtn.style.display = 'none';
-                guestBtn.style.display = 'none';
-                openPanelBtn.style.display = 'block';
-                signoutBtn.style.display = 'block';
+    checkAuthStatus() {
+        chrome.storage.local.get(['authToken', 'userEmail'], (result) => {
+            if (result.authToken) {
+                this.showAuthenticatedState(result.userEmail);
             } else {
-                statusDiv.className = 'status signed-out';
-                statusText.textContent = 'Not signed in';
-                userInfoDiv.style.display = 'none';
-                signinGoogleBtn.style.display = 'block';
-                signinMicrosoftBtn.style.display = 'block';
-                guestBtn.style.display = 'block';
-                signoutBtn.style.display = 'none';
+                this.showUnauthenticatedState();
             }
-        } catch (error) {
-            console.error('Error checking auth status:', error);
-        }
+        });
+    }
+
+    showAuthenticatedState(userEmail) {
+        document.getElementById('auth-status').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); border-radius: 50%; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 20px;">✅</div>
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #333;">Signed In</h3>
+                <p style="margin: 0 0 16px 0; font-size: 14px; color: #666;">${userEmail}</p>
+                <button id="signout-btn" style="background: #f8f9fa; color: #666; border: 1px solid #ddd; padding: 8px 16px; border-radius: 6px; font-size: 12px; cursor: pointer;">Sign Out</button>
+            </div>
+        `;
+    }
+
+    showUnauthenticatedState() {
+        document.getElementById('auth-status').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 20px;">🧠</div>
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #333;">TalkPilot</h3>
+                <p style="margin: 0 0 16px 0; font-size: 14px; color: #666;">AI Sales Assistant</p>
+                <p style="margin: 0 0 16px 0; font-size: 12px; color: #999;">Sign in on a video call page to get started</p>
+            </div>
+        `;
     }
 
     setupEventListeners() {
-        document.getElementById('signin-google').addEventListener('click', () => {
-            this.signIn('google');
-        });
-        
-        document.getElementById('signin-microsoft').addEventListener('click', () => {
-            this.signIn('microsoft');
-        });
-        
-        document.getElementById('guest-btn').addEventListener('click', () => {
-            this.continueAsGuest();
-        });
-        
-        document.getElementById('signout-btn').addEventListener('click', () => {
-            this.signOut();
-        });
-        
-        document.getElementById('open-panel-btn').addEventListener('click', () => {
-            this.openTalkPilotPanel();
-        });
-    }
-
-    async signIn(provider) {
-        try {
-            if (provider === 'google') {
-                await this.handleGoogleSignIn();
-            } else if (provider === 'microsoft') {
-                // TODO: Implement Microsoft OAuth
-                alert('Microsoft sign-in not implemented yet');
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'signout-btn') {
+                this.signOut();
             }
-        } catch (error) {
-            alert('Sign-in error: ' + error.message);
-        }
+        });
     }
 
-    async handleGoogleSignIn() {
-        try {
-            // Get OAuth URL
-            const authResponse = await fetch('https://talkpilot-extension-uc6a.vercel.app/api/auth/google/auth', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'getAuthUrl'
-                })
-            });
-
-            if (!authResponse.ok) {
-                throw new Error(`Failed to get auth URL: ${authResponse.status}`);
-            }
-
-            const authData = await authResponse.json();
-            
-            if (authData.success) {
-                // Open OAuth popup
-                const popup = window.open(
-                    authData.authUrl,
-                    'google_oauth',
-                    'width=600,height=700,scrollbars=yes,resizable=yes'
-                );
-
-                // Listen for OAuth completion
-                const checkPopup = setInterval(async () => {
-                    if (popup.closed) {
-                        clearInterval(checkPopup);
-                        
-                        // Check if we have tokens stored
-                        chrome.storage.local.get(['googleAccessToken', 'googleUserInfo'], async (result) => {
-                            if (result.googleAccessToken && result.googleUserInfo) {
-                                // Store user data
-                                await chrome.storage.local.set({
-                                    authToken: result.googleAccessToken,
-                                    userEmail: result.googleUserInfo.email,
-                                    userName: result.googleUserInfo.name,
-                                    isGuest: false
-                                });
-                                
-                                await this.checkAuthStatus();
-                            } else {
-                                alert('Google authentication was cancelled or failed');
-                            }
-                        });
-                    }
-                }, 1000);
-            } else {
-                throw new Error(authData.error || 'Failed to get auth URL');
-            }
-        } catch (error) {
-            console.error('Google sign-in error:', error);
-            alert('Google sign-in error: ' + error.message);
-        }
-    }
-
-    async continueAsGuest() {
-        try {
-            await chrome.storage.local.set({
-                isGuest: true,
-                userEmail: 'guest@talkpilot.com',
-                userName: 'Guest User'
-            });
-            await this.checkAuthStatus();
-        } catch (error) {
-            alert('Error setting guest mode: ' + error.message);
-        }
-    }
-
-    async signOut() {
-        try {
-            await chrome.storage.local.remove(['authToken', 'userEmail', 'userName', 'isGuest']);
-            await this.checkAuthStatus();
-        } catch (error) {
-            alert('Sign-out error: ' + error.message);
-        }
-    }
-
-    async openTalkPilotPanel() {
-        try {
-            // Get the active tab
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            
-            // Send message to content script to open the panel
-            await chrome.tabs.sendMessage(tab.id, { action: 'openTalkPilotPanel' });
-            
-            // Close the popup
-            window.close();
-        } catch (error) {
-            console.error('Error opening TalkPilot panel:', error);
-            alert('Error opening panel: ' + error.message);
-        }
+    signOut() {
+        chrome.storage.local.clear(() => {
+            this.showUnauthenticatedState();
+        });
     }
 }
 
 // Initialize popup when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new PopupManager();
+    new Popup();
 });
+

@@ -1,114 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
     <title>TalkPilot</title>
-    <link rel="stylesheet" href="styles.css" />
     <style>
         body {
-            width: 350px;
-            min-height: 300px;
+            width: 300px;
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: white;
         }
-        .popup-container {
-            padding: 20px;
+        
+        #auth-status {
+            min-height: 200px;
         }
-        .status {
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-weight: 500;
-        }
-        .signed-in {
-            background: linear-gradient(135deg, #d4edda, #c3e6cb);
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .signed-out {
-            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .guest {
-            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }
+        
         button {
-            width: 100%;
-            padding: 12px;
-            margin: 8px 0;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 500;
             transition: all 0.3s ease;
         }
-        .primary {
-            background: linear-gradient(135deg, #007bff, #0056b3);
-            color: white;
-        }
-        .primary:hover {
-            background: linear-gradient(135deg, #0056b3, #004085);
-            transform: translateY(-1px);
-        }
-        .secondary {
-            background: linear-gradient(135deg, #6c757d, #545b62);
-            color: white;
-        }
-        .secondary:hover {
-            background: linear-gradient(135deg, #545b62, #3d4449);
-            transform: translateY(-1px);
-        }
-        .guest-btn {
-            background: linear-gradient(135deg, #28a745, #1e7e34);
-            color: white;
-        }
-        .guest-btn:hover {
-            background: linear-gradient(135deg, #1e7e34, #155724);
-            transform: translateY(-1px);
-        }
-        .user-info {
-            margin: 10px 0;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-        }
-        .logo {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .logo h1 {
-            margin: 0;
-            color: #007bff;
-            font-size: 24px;
+        
+        button:hover {
+            opacity: 0.8;
         }
     </style>
 </head>
 <body>
-    <div class="popup-container">
-        <div class="logo">
-            <h1>🎤 TalkPilot</h1>
-        </div>
-        
-        <div id="status" class="status signed-out">
-            <strong>Status</strong><br>
-            <span id="status-text">Not signed in</span>
-        </div>
-        
-        <div id="user-info" class="user-info" style="display: none;">
-            <strong>Signed in as:</strong><br>
-            <span id="user-email"></span>
-        </div>
-        
-        <button id="signin-google" class="primary">Sign in with Google</button>
-        <button id="signin-microsoft" class="primary">Sign in with Microsoft</button>
-        <button id="guest-btn" class="guest-btn">Continue as Guest</button>
-        <button id="open-panel-btn" class="secondary" style="display: none;">Open TalkPilot Panel</button>
-        <button id="signout-btn" class="secondary" style="display: none;">Sign Out</button>
+    <div id="auth-status">
+        <!-- Content will be populated by JavaScript -->
     </div>
     
     <script src="popup.js"></script>
