@@ -5,9 +5,10 @@
   "description": "AI-powered sales assistant for video calls with CRM integration",
   "permissions": [
     "activeTab",
+    "identity",
+    "tabCapture",
     "storage",
-    "scripting",
-    "tabCapture"
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -27,7 +28,6 @@
       "run_at": "document_end"
     }
   ],
-
   "externally_connectable": {
     "matches": ["https://*.vercel.app/*"]
   }

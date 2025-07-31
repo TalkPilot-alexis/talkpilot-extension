@@ -275,20 +275,128 @@ class ContentScript {
         }
     }
 
-    initiateOAuth(provider) {
-        // Send message to background script to initiate OAuth
-        chrome.runtime.sendMessage({
-            action: 'initiateOAuth',
-            provider: provider
-        }, (response) => {
-            if (response && response.success) {
-                // OAuth initiated successfully
-                this.showOAuthInProgress(provider);
-            } else {
-                // Handle OAuth error
-                this.showOAuthError(provider);
+    async initiateOAuth(provider) {
+        try {
+            console.log(`TalkPilot: Initiating OAuth for ${provider}...`);
+            
+            // Get the OAuth URL from our backend
+            const authUrlResponse = await fetch(`${this.apiBaseUrl}/auth/${provider}/auth`);
+            if (!authUrlResponse.ok) {
+                throw new Error(`Failed to get ${provider} OAuth URL`);
             }
-        });
+            
+            const { authUrl } = await authUrlResponse.json();
+            console.log(`TalkPilot: Got ${provider} OAuth URL:`, authUrl);
+            
+            // Use chrome.identity.launchWebAuthFlow for secure OAuth
+            const redirectUrl = chrome.identity.getRedirectURL('oauth-callback');
+            console.log(`TalkPilot: Redirect URL:`, redirectUrl);
+            
+            const finalAuthUrl = `${authUrl}&redirect_uri=${encodeURIComponent(redirectUrl)}`;
+            
+            chrome.identity.launchWebAuthFlow({
+                url: finalAuthUrl,
+                interactive: true
+            }, async (redirectUrl) => {
+                if (chrome.runtime.lastError) {
+                    console.error(`TalkPilot: ${provider} OAuth error:`, chrome.runtime.lastError);
+                    this.showOAuthError(provider, chrome.runtime.lastError.message);
+                    return;
+                }
+                
+                if (!redirectUrl) {
+                    console.error(`TalkPilot: ${provider} OAuth cancelled by user`);
+                    this.showOAuthError(provider, 'Authentication cancelled');
+                    return;
+                }
+                
+                console.log(`TalkPilot: ${provider} OAuth redirect URL:`, redirectUrl);
+                
+                // Extract the authorization code from the redirect URL
+                const urlParams = new URLSearchParams(redirectUrl.split('?')[1]);
+                const code = urlParams.get('code');
+                const error = urlParams.get('error');
+                
+                if (error) {
+                    console.error(`TalkPilot: ${provider} OAuth error:`, error);
+                    this.showOAuthError(provider, error);
+                    return;
+                }
+                
+                if (!code) {
+                    console.error(`TalkPilot: ${provider} OAuth - no authorization code received`);
+                    this.showOAuthError(provider, 'No authorization code received');
+                    return;
+                }
+                
+                // Exchange the code for tokens
+                await this.exchangeCodeForTokens(provider, code);
+                
+            });
+            
+        } catch (error) {
+            console.error(`TalkPilot: ${provider} OAuth initiation error:`, error);
+            this.showOAuthError(provider, error.message);
+        }
+    }
+
+    async exchangeCodeForTokens(provider, code) {
+        try {
+            console.log(`TalkPilot: Exchanging code for ${provider} tokens...`);
+            
+            const response = await fetch(`${this.apiBaseUrl}/auth/${provider}/callback`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ code })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to exchange code for ${provider} tokens`);
+            }
+            
+            const tokens = await response.json();
+            console.log(`TalkPilot: ${provider} tokens received:`, tokens);
+            
+            // Store tokens in chrome.storage.local
+            await new Promise((resolve) => {
+                chrome.storage.local.set({
+                    authToken: tokens.accessToken,
+                    refreshToken: tokens.refreshToken,
+                    userEmail: tokens.userInfo?.email || 'user@example.com',
+                    provider: provider,
+                    isGuest: false
+                }, resolve);
+            });
+            
+            // Show success and proceed
+            this.showOAuthSuccess(provider);
+            
+        } catch (error) {
+            console.error(`TalkPilot: ${provider} token exchange error:`, error);
+            this.showOAuthError(provider, error.message);
+        }
+    }
+
+    showOAuthSuccess(provider) {
+        const modalContent = document.querySelector('#talkpilot-url-modal > div');
+        if (modalContent) {
+            modalContent.innerHTML = `
+                <div style="margin-bottom: 24px;">
+                    <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 24px;">✅</div>
+                    <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600; color: #333;">Successfully Signed In!</h2>
+                    <p style="margin: 0; font-size: 16px; color: #666; line-height: 1.5;">You're now signed in with ${provider}.</p>
+                </div>
+                
+                <button id="talkpilot-activate-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">Activate Assistant</button>
+            `;
+
+            const activateBtn = modalContent.querySelector('#talkpilot-activate-btn');
+            activateBtn.addEventListener('click', () => {
+                this.activateAssistant();
+            });
+        }
     }
 
     continueAsGuest() {
@@ -320,14 +428,14 @@ class ContentScript {
         }
     }
 
-    showOAuthError(provider) {
+    showOAuthError(provider, errorMessage = '') {
         const modalContent = document.querySelector('#talkpilot-url-modal > div');
         if (modalContent) {
             modalContent.innerHTML = `
                 <div style="margin-bottom: 24px;">
                     <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #FF6B6B 0%, #FF5252 100%); border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 24px;">❌</div>
                     <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600; color: #333;">Sign-in Failed</h2>
-                    <p style="margin: 0; font-size: 16px; color: #666; line-height: 1.5;">There was an issue connecting to ${provider}. Please try again.</p>
+                    <p style="margin: 0; font-size: 16px; color: #666; line-height: 1.5;">There was an issue connecting to ${provider}.${errorMessage ? ' ' + errorMessage : ''} Please try again.</p>
                 </div>
                 
                 <button id="talkpilot-retry-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">Try Again</button>
@@ -1152,6 +1260,7 @@ class ContentScript {
                         <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: #333;">LIVE TRANSCRIPT</h4>
                         <div style="display: flex; gap: 8px;">
                             <button id="talkpilot-test-transcript" style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">Test</button>
+                            <button id="talkpilot-debug-toggle" style="background: #6c757d; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">Debug</button>
                             <button id="talkpilot-clear-transcript" style="background: none; border: none; color: #667eea; font-size: 11px; cursor: pointer; padding: 0;">Clear</button>
                         </div>
                     </div>
@@ -1308,6 +1417,14 @@ class ContentScript {
         if (endCallButtonSmall) {
             endCallButtonSmall.addEventListener('click', () => {
                 this.endCall();
+            });
+        }
+        
+        // Debug toggle button
+        const debugToggle = document.getElementById('talkpilot-debug-toggle');
+        if (debugToggle) {
+            debugToggle.addEventListener('click', () => {
+                this.toggleDebugMode();
             });
         }
     }
@@ -1485,24 +1602,26 @@ class ContentScript {
         try {
             console.log('TalkPilot: Starting real-time audio capture...');
             
-            // Try multiple audio capture methods
+            // Try multiple audio capture methods with improved error handling
             let stream = null;
             let captureMethod = 'unknown';
             
-            // Method 1: Try microphone capture first (fallback)
+            // Method 1: Try microphone capture first
             try {
                 console.log('TalkPilot: Trying microphone capture...');
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true
+                        autoGainControl: true,
+                        sampleRate: 16000 // Match Deepgram's expected sample rate
                     } 
                 });
                 captureMethod = 'microphone';
                 console.log('TalkPilot: Microphone capture successful');
             } catch (micError) {
-                console.log('TalkPilot: Microphone capture failed:', micError);
+                console.log('TalkPilot: Microphone capture failed:', micError.message);
+                this.showCaptureError('Microphone capture failed: ' + micError.message);
             }
             
             // Method 2: Try tab capture if microphone failed
@@ -1527,32 +1646,34 @@ class ContentScript {
                         console.log('TalkPilot: Tab audio stream obtained');
                     } else {
                         console.error('TalkPilot: Tab capture failed:', response.error);
+                        this.showCaptureError('Tab capture failed: ' + response.error);
                     }
                 } catch (tabError) {
-                    console.error('TalkPilot: Tab capture error:', tabError);
+                    console.error('TalkPilot: Tab capture error:', tabError.message);
+                    this.showCaptureError('Tab capture error: ' + tabError.message);
                 }
             }
             
-            // If both methods failed, show error
+            // If both methods failed, show error and return
             if (!stream) {
                 console.error('TalkPilot: All audio capture methods failed');
-                alert('Unable to capture audio. Please ensure microphone permissions are granted and you\'re on a supported platform.');
+                this.showCaptureError('Unable to capture audio. Please ensure microphone permissions are granted and you\'re on a supported platform.');
                 return;
             }
             
             console.log('TalkPilot: Audio capture successful using method:', captureMethod);
             
-            // Set up audio processing
-            this.audioContext = new AudioContext();
+            // Set up audio processing for Deepgram
+            this.audioContext = new AudioContext({ sampleRate: 16000 });
             const source = this.audioContext.createMediaStreamSource(stream);
             
-            // Create a real-time audio processor
+            // Create a real-time audio processor for 16-bit PCM
             const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
             
             source.connect(processor);
             processor.connect(this.audioContext.destination);
             
-            // Process audio in real-time
+            // Process audio in real-time and send to Deepgram
             processor.onaudioprocess = (e) => {
                 const inputData = e.inputBuffer.getChannelData(0);
                 this.processAudioChunk(inputData);
@@ -1563,102 +1684,301 @@ class ContentScript {
             
             console.log('TalkPilot: Real-time audio capture started successfully');
             
-            // Start real-time transcription
+            // Start real-time transcription with Deepgram
             await this.startRealTimeTranscription();
             
         } catch (error) {
             console.error('TalkPilot: Failed to start audio capture:', error);
-            alert('Error starting audio capture: ' + error.message);
+            this.showCaptureError('Error starting audio capture: ' + error.message);
         }
+    }
+
+    showCaptureError(message) {
+        console.error('TalkPilot: Audio capture error:', message);
+        // Show user-visible error tooltip
+        const errorDiv = document.createElement('div');
+        errorDiv.id = 'talkpilot-capture-error';
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff4444;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
+        errorDiv.textContent = message;
+        document.body.appendChild(errorDiv);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 5000);
+    }
+
+    toggleDebugMode() {
+        if (!this.debugMode) {
+            this.debugMode = true;
+            this.showDebugInfo();
+        } else {
+            this.debugMode = false;
+            this.hideDebugInfo();
+        }
+    }
+
+    showDebugInfo() {
+        // Create debug panel
+        const debugPanel = document.createElement('div');
+        debugPanel.id = 'talkpilot-debug-panel';
+        debugPanel.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 400px;
+            max-height: 80vh;
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            z-index: 10001;
+            overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
+
+        const debugInfo = this.getDebugInfo();
+        debugPanel.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="margin: 0; color: #f7fafc;">🔧 Debug Mode</h4>
+                <button onclick="document.getElementById('talkpilot-debug-panel').remove();" style="background: none; border: none; color: #e2e8f0; cursor: pointer; font-size: 16px;">×</button>
+            </div>
+            <pre style="margin: 0; white-space: pre-wrap; word-break: break-word;">${debugInfo}</pre>
+        `;
+
+        document.body.appendChild(debugPanel);
+    }
+
+    hideDebugInfo() {
+        const debugPanel = document.getElementById('talkpilot-debug-panel');
+        if (debugPanel) {
+            debugPanel.remove();
+        }
+    }
+
+    getDebugInfo() {
+        const info = {
+            timestamp: new Date().toISOString(),
+            extension: {
+                isActive: this.isActive,
+                hasShownModal: this.hasShownModal,
+                apiBaseUrl: this.apiBaseUrl
+            },
+            audio: {
+                audioContext: !!this.audioContext,
+                audioProcessor: !!this.audioProcessor,
+                audioSource: !!this.audioSource,
+                mediaRecorder: !!this.mediaRecorder,
+                audioChunks: this.audioChunks.length
+            },
+            transcription: {
+                isTranscribing: this.isTranscribing,
+                websocket: this.websocket ? {
+                    readyState: this.websocket.readyState,
+                    url: this.websocket.url
+                } : null,
+                transcriptBuffer: this.transcriptBuffer.length,
+                currentSpeaker: this.currentSpeaker,
+                isSpeaking: this.isSpeaking,
+                speakers: Array.from(this.speakers.keys())
+            },
+            storage: {
+                // Get storage info asynchronously
+                pending: 'Loading...'
+            }
+        };
+
+        // Get storage info
+        chrome.storage.local.get(null, (result) => {
+            info.storage = result;
+            // Update debug panel if it exists
+            const debugPanel = document.getElementById('talkpilot-debug-panel');
+            if (debugPanel && this.debugMode) {
+                const pre = debugPanel.querySelector('pre');
+                if (pre) {
+                    pre.textContent = JSON.stringify(info, null, 2);
+                }
+            }
+        });
+
+        return JSON.stringify(info, null, 2);
     }
 
     async startRealTimeTranscription() {
         try {
-            console.log('TalkPilot: Starting real-time transcription...');
+            console.log('TalkPilot: Starting real-time transcription with Deepgram...');
             
-            // For now, skip WebSocket and use local transcription simulation
-            console.log('TalkPilot: Using local transcription simulation (WebSocket disabled)');
-            this.isTranscribing = true;
+            // Connect directly to Deepgram's real-time transcription API
+            const deepgramUrl = 'wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&model=nova-2&interim_results=true&endpointing=200&vad_events=true&diarize=true&utterances=true&smart_format=true&punctuate=true';
             
-            // Start local transcription simulation
-            this.startLocalTranscription();
+            console.log('TalkPilot: Connecting to Deepgram WebSocket:', deepgramUrl);
             
-            // TODO: Re-enable WebSocket when backend is fixed
-            /*
-            // Create WebSocket connection to our backend
-            const wsUrl = this.apiBaseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/transcription/stream';
-            console.log('TalkPilot: Connecting to WebSocket URL:', wsUrl);
+            this.websocket = new WebSocket(deepgramUrl);
             
-            this.websocket = new WebSocket(wsUrl);
-            
+            // Add authorization header
             this.websocket.onopen = () => {
-                console.log('TalkPilot: WebSocket connected for real-time transcription');
+                console.log('TalkPilot: WebSocket connected to Deepgram');
                 this.isTranscribing = true;
+                
+                // Send authorization header
+                const authMessage = JSON.stringify({
+                    type: 'Authorization',
+                    authorization: `Token ${this.getDeepgramApiKey()}`
+                });
+                this.websocket.send(authMessage);
             };
-            */
 
             this.websocket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     
-                    switch (data.type) {
-                        case 'connected':
-                            console.log('TalkPilot: Deepgram connected:', data.message);
-                            break;
+                    if (data.type === 'Results') {
+                        // Handle transcription results
+                        if (data.channel?.alternatives?.[0]?.transcript) {
+                            const transcript = data.channel.alternatives[0].transcript;
+                            const isFinal = data.is_final;
+                            const confidence = data.channel.alternatives[0].confidence;
                             
-                        case 'transcript':
-                            this.handleTranscript(data);
-                            break;
+                            // Handle speaker diarization
+                            if (data.channel?.alternatives?.[0]?.words) {
+                                const words = data.channel.alternatives[0].words;
+                                const speakers = words.map(word => ({
+                                    word: word.word,
+                                    speaker: word.speaker,
+                                    start: word.start,
+                                    end: word.end
+                                }));
+                                
+                                this.handleSpeakerDiarization({ speakers, isFinal });
+                            }
                             
-                        case 'speakers':
-                            this.handleSpeakerDiarization(data);
-                            break;
-                            
-                        case 'vad':
-                            this.handleVoiceActivityDetection(data);
-                            break;
-                            
-                        case 'utterance':
-                            this.handleUtteranceDetection(data);
-                            break;
-                            
-                        case 'error':
-                            console.error('TalkPilot: Deepgram error:', data.error);
-                            break;
-                            
-                        case 'closed':
-                            console.log('TalkPilot: Deepgram connection closed');
-                            this.isTranscribing = false;
-                            break;
+                            // Handle transcript
+                            this.handleTranscript({
+                                transcript,
+                                isFinal,
+                                confidence,
+                                words: data.channel.alternatives[0].words || []
+                            });
+                        }
+                    } else if (data.type === 'VAD') {
+                        // Handle voice activity detection
+                        this.handleVoiceActivityDetection({
+                            isSpeaking: data.type === 'start'
+                        });
+                    } else if (data.type === 'UtteranceEnd') {
+                        // Handle utterance detection
+                        this.handleUtteranceDetection(data);
+                    } else if (data.type === 'Error') {
+                        console.error('TalkPilot: Deepgram error:', data.error);
+                        this.showTranscriptionError('Deepgram error: ' + data.error);
                     }
                 } catch (error) {
-                    console.error('TalkPilot: Error parsing WebSocket message:', error);
+                    console.error('TalkPilot: Error parsing Deepgram message:', error);
                 }
             };
 
             this.websocket.onerror = (error) => {
-                console.error('TalkPilot: WebSocket error:', error);
+                console.error('TalkPilot: Deepgram WebSocket error:', error);
                 this.isTranscribing = false;
+                this.showTranscriptionError('WebSocket connection failed');
             };
 
-            this.websocket.onclose = () => {
-                console.log('TalkPilot: WebSocket closed');
+            this.websocket.onclose = (event) => {
+                console.log('TalkPilot: Deepgram WebSocket closed:', event.code, event.reason);
                 this.isTranscribing = false;
+                
+                // Implement retry logic with exponential backoff
+                if (event.code !== 1000) { // Not a normal closure
+                    this.retryDeepgramConnection();
+                }
             };
             
         } catch (error) {
             console.error('TalkPilot: Failed to start real-time transcription:', error);
+            this.showTranscriptionError('Failed to start transcription: ' + error.message);
         }
     }
 
+    getDeepgramApiKey() {
+        // In production, this should be securely stored and retrieved
+        // For now, we'll use a placeholder - you'll need to replace this
+        return '12da8c243182af6511d33f65165d730b985973f2';
+    }
+
+    retryDeepgramConnection() {
+        const maxRetries = 3;
+        const retryDelay = 2000; // 2 seconds
+        
+        if (!this.retryCount) this.retryCount = 0;
+        
+        if (this.retryCount < maxRetries) {
+            this.retryCount++;
+            console.log(`TalkPilot: Retrying Deepgram connection (${this.retryCount}/${maxRetries})...`);
+            
+            setTimeout(() => {
+                this.startRealTimeTranscription();
+            }, retryDelay * this.retryCount);
+        } else {
+            console.error('TalkPilot: Max retries reached for Deepgram connection');
+            this.showTranscriptionError('Failed to connect to transcription service after multiple attempts');
+        }
+    }
+
+    showTranscriptionError(message) {
+        console.error('TalkPilot: Transcription error:', message);
+        // Show user-visible error tooltip
+        const errorDiv = document.createElement('div');
+        errorDiv.id = 'talkpilot-transcription-error';
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: #ff8800;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
+        errorDiv.textContent = message;
+        document.body.appendChild(errorDiv);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 5000);
+    }
+
     processAudioChunk(audioData) {
-        // Convert audio data to 16-bit PCM
+        // Convert audio data to 16-bit PCM for Deepgram
         const pcmData = new Int16Array(audioData.length);
         for (let i = 0; i < audioData.length; i++) {
             pcmData[i] = Math.max(-32768, Math.min(32767, audioData[i] * 32768));
         }
         
-        // Send audio data to WebSocket if connected
+        // Send audio data directly to Deepgram WebSocket if connected
         if (this.websocket && this.websocket.readyState === WebSocket.OPEN && this.isTranscribing) {
             try {
                 const audioBuffer = Buffer.from(pcmData.buffer);
@@ -1685,56 +2005,7 @@ class ContentScript {
         }
     }
 
-    startLocalTranscription() {
-        console.log('TalkPilot: Starting local transcription simulation...');
-        
-        // Simulate transcription every 3-5 seconds
-        this.localTranscriptionInterval = setInterval(() => {
-            if (this.isTranscribing && this.isActive) {
-                const phrases = [
-                    "Hello, how are you today?",
-                    "I'd like to discuss our solution.",
-                    "What are your current challenges?",
-                    "Let me show you how this works.",
-                    "What's your timeline for implementation?",
-                    "Who else needs to be involved in the decision?",
-                    "What's your budget for this project?",
-                    "How does this compare to your current process?",
-                    "What would success look like for you?",
-                    "Are there any concerns I should address?"
-                ];
-                
-                const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
-                this.handleTranscript({
-                    transcript: randomPhrase,
-                    isFinal: true,
-                    confidence: 0.95
-                });
-            }
-        }, 3000 + Math.random() * 2000); // Random interval between 3-5 seconds
-    }
 
-    simulateTranscriptionForTesting() {
-        // Only simulate if we haven't received real transcription yet
-        if (!this.transcriptBuffer || this.transcriptBuffer.length < 50) {
-            const testPhrases = [
-                "Hello, this is a test transcription.",
-                "I'm testing the TalkPilot audio capture.",
-                "The microphone is working correctly.",
-                "This is a simulated transcript for testing."
-            ];
-            
-            // Randomly add test phrases every few seconds
-            if (Math.random() < 0.01) { // 1% chance per audio chunk
-                const randomPhrase = testPhrases[Math.floor(Math.random() * testPhrases.length)];
-                this.handleTranscript({
-                    transcript: randomPhrase,
-                    isFinal: true,
-                    confidence: 0.95
-                });
-            }
-        }
-    }
 
     audioBufferToWav(buffer) {
         const length = buffer.length;
@@ -1908,7 +2179,7 @@ class ContentScript {
         }
     }
 
-    handleTranscript(data) {
+    async handleTranscript(data) {
         const { transcript, isFinal, confidence } = data;
         
         if (transcript) {
@@ -1917,10 +2188,45 @@ class ContentScript {
                 this.transcriptBuffer += transcript + ' ';
                 // Analyze conversation when we have final results
                 this.analyzeConversation(transcript);
+                
+                // Forward final transcript to our backend for processing
+                await this.forwardTranscriptToBackend(transcript, isFinal, confidence);
             }
             
             // Update display in real-time
             this.updateTranscriptDisplay(transcript, isFinal, confidence);
+        }
+    }
+
+    async forwardTranscriptToBackend(transcript, isFinal, confidence) {
+        try {
+            const context = await this.getStoredContext();
+            const playbookSteps = this.getCurrentPlaybookProgress();
+            const currentProgress = this.getCurrentPlaybookProgress();
+            
+            const response = await fetch(`${this.apiBaseUrl}/transcription/receive`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    transcript,
+                    isFinal,
+                    confidence,
+                    context,
+                    playbookSteps,
+                    currentProgress
+                })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to forward transcript to backend:', response.statusText);
+            } else {
+                const result = await response.json();
+                console.log('Transcript forwarded successfully:', result);
+            }
+        } catch (error) {
+            console.error('Error forwarding transcript to backend:', error);
         }
     }
 
@@ -2318,11 +2624,7 @@ class ContentScript {
             this.isTranscribing = false;
         }
         
-        // Clean up local transcription interval
-        if (this.localTranscriptionInterval) {
-            clearInterval(this.localTranscriptionInterval);
-            this.localTranscriptionInterval = null;
-        }
+
         
         // Clean up audio capture
         if (this.audioProcessor) {
