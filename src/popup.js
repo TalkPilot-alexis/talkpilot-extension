@@ -73,16 +73,28 @@ class PopupManager {
 
     async signIn(provider) {
         try {
-            const response = await chrome.runtime.sendMessage({
-                action: 'initiateOAuth',
-                provider: provider
+            // Simulate successful sign-in for now
+            const mockUserData = {
+                google: {
+                    email: 'user@gmail.com',
+                    name: 'Google User'
+                },
+                microsoft: {
+                    email: 'user@outlook.com', 
+                    name: 'Microsoft User'
+                }
+            };
+            
+            const userData = mockUserData[provider];
+            
+            await chrome.storage.local.set({
+                authToken: `mock_${provider}_token`,
+                userEmail: userData.email,
+                userName: userData.name,
+                isGuest: false
             });
             
-            if (response.success) {
-                await this.checkAuthStatus();
-            } else {
-                alert('Sign-in failed: ' + response.error);
-            }
+            await this.checkAuthStatus();
         } catch (error) {
             alert('Sign-in error: ' + error.message);
         }

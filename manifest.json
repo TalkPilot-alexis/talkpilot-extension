@@ -28,13 +28,7 @@
       "run_at": "document_end"
     }
   ],
-  "oauth2": {
-    "client_id": "373839371418-gg5bsl8diom6m0b4q6kkv65p8i31f2vj.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
-    ]
-  },
+
   "externally_connectable": {
     "matches": ["https://*.vercel.app/*"]
   }
