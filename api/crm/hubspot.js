@@ -3,7 +3,7 @@ import { Client } from '@hubspot/api-client';
 // HubSpot OAuth configuration
 const HUBSPOT_CLIENT_ID = process.env.HUBSPOT_CLIENT_ID || 'your-hubspot-client-id';
 const HUBSPOT_CLIENT_SECRET = process.env.HUBSPOT_CLIENT_SECRET || 'your-hubspot-client-secret';
-const HUBSPOT_REDIRECT_URI = process.env.HUBSPOT_REDIRECT_URI || 'https://talkpilot-extension-uc6a.vercel.app/api/crm/hubspot/callback';
+const HUBSPOT_REDIRECT_URI = process.env.HUBSPOT_REDIRECT_URI || 'https://talkpilot-extension-uc6a.vercel.app/api/crm/oauth-callback.html';
 
 export default async function handler(req, res) {
   // Enable CORS

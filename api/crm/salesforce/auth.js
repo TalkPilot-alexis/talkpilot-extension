@@ -2,7 +2,7 @@ import jsforce from 'jsforce';
 
 const SALESFORCE_CLIENT_ID = process.env.SALESFORCE_CONSUMER_KEY;
 const SALESFORCE_CLIENT_SECRET = process.env.SALESFORCE_CONSUMER_SECRET;
-const SALESFORCE_REDIRECT_URI = 'https://talkpilot-extension-uc6a.vercel.app/api/crm/salesforce/callback';
+const SALESFORCE_REDIRECT_URI = 'https://talkpilot-extension-uc6a.vercel.app/api/crm/oauth-callback.html';
 
 export default async function handler(req, res) {
   // Enable CORS

@@ -1,6 +1,6 @@
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = 'https://talkpilot-extension-uc6a.vercel.app/api/auth/google/callback';
+const GOOGLE_REDIRECT_URI = 'https://talkpilot-extension-uc6a.vercel.app/api/crm/oauth-callback.html';
 
 export default async function handler(req, res) {
   // Enable CORS

@@ -32,7 +32,7 @@ export default async function handler(req, res) {
         grant_type: 'authorization_code',
         client_id: HUBSPOT_CLIENT_ID,
         client_secret: HUBSPOT_CLIENT_SECRET,
-        redirect_uri: 'https://talkpilot-extension-uc6a.vercel.app/api/crm/hubspot/callback',
+        redirect_uri: 'https://talkpilot-extension-uc6a.vercel.app/api/crm/oauth-callback.html',
         code: code,
       }),
     });

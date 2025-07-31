@@ -463,8 +463,12 @@ class ContentScript {
                 })
             });
 
+            console.log(`TalkPilot: ${provider} auth response status:`, authResponse.status);
+
             if (!authResponse.ok) {
-                throw new Error(`Failed to get auth URL: ${authResponse.status}`);
+                const errorText = await authResponse.text();
+                console.error(`TalkPilot: ${provider} auth error:`, errorText);
+                throw new Error(`Failed to get auth URL: ${authResponse.status} - ${errorText}`);
             }
 
             const authData = await authResponse.json();
