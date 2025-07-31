@@ -450,20 +450,74 @@ class ContentScript {
                 `;
             }
 
-            console.log(`TalkPilot: Calling ${provider} API at ${this.apiBaseUrl}/crm/${provider}`);
+            console.log(`TalkPilot: Starting OAuth flow for ${provider}`);
+
+            // Get OAuth URL
+            const authResponse = await fetch(`${this.apiBaseUrl}/crm/${provider}/auth`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'getAuthUrl'
+                })
+            });
+
+            if (!authResponse.ok) {
+                throw new Error(`Failed to get auth URL: ${authResponse.status}`);
+            }
+
+            const authData = await authResponse.json();
             
-            // Call real CRM API
+            if (authData.success) {
+                // Open OAuth popup
+                const popup = window.open(
+                    authData.authUrl,
+                    `${provider}_oauth`,
+                    'width=600,height=700,scrollbars=yes,resizable=yes'
+                );
+
+                // Listen for OAuth completion
+                const checkPopup = setInterval(async () => {
+                    if (popup.closed) {
+                        clearInterval(checkPopup);
+                        
+                        // Check if we have tokens stored
+                        chrome.storage.local.get([`${provider}AccessToken`, `${provider}RefreshToken`], async (result) => {
+                            if (result[`${provider}AccessToken`]) {
+                                // Fetch CRM data with access token
+                                await this.fetchCRMData(provider, result[`${provider}AccessToken`], result[`${provider}InstanceUrl`]);
+                            } else {
+                                // Show error if no token found
+                                this.showCRMError(provider, 'Authentication was cancelled or failed');
+                            }
+                        });
+                    }
+                }, 1000);
+            } else {
+                throw new Error(authData.error || 'Failed to get auth URL');
+            }
+        } catch (error) {
+            console.error('CRM sign-in error:', error);
+            this.showCRMError(provider, error.message);
+        }
+    }
+
+    async fetchCRMData(provider, accessToken, instanceUrl) {
+        try {
+            console.log(`TalkPilot: Fetching ${provider} data with access token`);
+            
             const response = await fetch(`${this.apiBaseUrl}/crm/${provider}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    action: provider === 'salesforce' ? 'getLeads' : 'getContacts'
+                    action: provider === 'salesforce' ? 'getLeads' : 'getContacts',
+                    accessToken: accessToken,
+                    instanceUrl: instanceUrl
                 })
             });
-
-            console.log(`TalkPilot: ${provider} API response status:`, response.status);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -474,7 +528,7 @@ class ContentScript {
             if (data.success) {
                 // Store CRM data
                 chrome.storage.local.set({
-                    crmToken: `real_${provider}_token`,
+                    crmToken: accessToken,
                     crmType: provider,
                     crmData: data[provider === 'salesforce' ? 'leads' : 'contacts']
                 }, () => {
@@ -486,20 +540,23 @@ class ContentScript {
                     }
                 });
             } else {
-                throw new Error(data.error || 'Failed to connect to CRM');
+                throw new Error(data.error || 'Failed to fetch CRM data');
             }
         } catch (error) {
-            console.error('CRM sign-in error:', error);
-            // Show error state
-            const signinSection = document.getElementById('crm-signin-section');
-            if (signinSection) {
-                signinSection.innerHTML = `
-                    <div style="text-align: center; padding: 20px;">
-                        <p style="margin: 0; color: #dc3545;">Failed to connect to ${provider}</p>
-                        <button onclick="window.talkpilotContentScript.handleCRMSignIn('${provider}')" style="margin-top: 12px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button>
-                    </div>
-                `;
-            }
+            console.error('CRM data fetch error:', error);
+            this.showCRMError(provider, error.message);
+        }
+    }
+
+    showCRMError(provider, message) {
+        const signinSection = document.getElementById('crm-signin-section');
+        if (signinSection) {
+            signinSection.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <p style="margin: 0; color: #dc3545;">Failed to connect to ${provider}: ${message}</p>
+                    <button onclick="window.talkpilotContentScript.handleCRMSignIn('${provider}')" style="margin-top: 12px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">Retry</button>
+                </div>
+            `;
         }
     }
 

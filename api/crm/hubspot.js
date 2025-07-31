@@ -1,6 +1,9 @@
 import { Client } from '@hubspot/api-client';
 
-const hubspotClient = new Client({ accessToken: process.env.HUBSPOT_ACCESS_TOKEN });
+// HubSpot OAuth configuration
+const HUBSPOT_CLIENT_ID = process.env.HUBSPOT_CLIENT_ID || 'your-hubspot-client-id';
+const HUBSPOT_CLIENT_SECRET = process.env.HUBSPOT_CLIENT_SECRET || 'your-hubspot-client-secret';
+const HUBSPOT_REDIRECT_URI = process.env.HUBSPOT_REDIRECT_URI || 'https://talkpilot-extension-uc6a.vercel.app/api/crm/hubspot/callback';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -13,10 +16,25 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { action, data } = req.body;
+  const { action, data, accessToken } = req.body;
 
   try {
+    // Check if we have an access token
+    if (!accessToken) {
+      res.status(401).json({ error: 'No access token provided. Please authenticate with HubSpot first.' });
+      return;
+    }
+
+    // Create HubSpot client with user's access token
+    const hubspotClient = new Client({ accessToken });
+
     switch (action) {
+      case 'getAuthUrl':
+        // Generate OAuth URL for HubSpot
+        const authUrl = `https://app.hubspot.com/oauth/authorize?client_id=${HUBSPOT_CLIENT_ID}&redirect_uri=${encodeURIComponent(HUBSPOT_REDIRECT_URI)}&scope=contacts%20crm.objects.contacts.read%20crm.objects.companies.read%20crm.objects.deals.read`;
+        res.status(200).json({ success: true, authUrl });
+        break;
+
       case 'getContacts':
         const contacts = await hubspotClient.crm.contacts.basicApi.getPage(50);
         res.status(200).json({ success: true, contacts: contacts.results });

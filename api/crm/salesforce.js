@@ -14,29 +14,19 @@ export default async function handler(req, res) {
   const { action, data } = req.body;
 
   try {
-    // Use real Salesforce credentials from environment variables
-    const username = process.env.SALESFORCE_USERNAME;
-    const password = process.env.SALESFORCE_PASSWORD;
-    const securityToken = process.env.SALESFORCE_SECURITY_TOKEN || '';
-    const consumerKey = process.env.SALESFORCE_CONSUMER_KEY;
-    const consumerSecret = process.env.SALESFORCE_CONSUMER_SECRET;
-    
-    // Check if credentials are available
-    if (!username || !password || !consumerKey || !consumerSecret) {
-      console.error('Salesforce credentials not configured');
-      res.status(500).json({ error: 'Salesforce credentials not configured. Please set SALESFORCE_USERNAME, SALESFORCE_PASSWORD, SALESFORCE_CONSUMER_KEY, and SALESFORCE_CONSUMER_SECRET environment variables.' });
+    const { action, data, accessToken, instanceUrl } = req.body;
+
+    // Check if we have an access token
+    if (!accessToken) {
+      res.status(401).json({ error: 'No access token provided. Please authenticate with Salesforce first.' });
       return;
     }
 
+    // Create Salesforce connection with user's access token
     const conn = new jsforce.Connection({
-      loginUrl: 'https://login.salesforce.com'
+      accessToken: accessToken,
+      instanceUrl: instanceUrl || 'https://login.salesforce.com'
     });
-
-    // Login to Salesforce
-    await conn.login(
-      process.env.SALESFORCE_USERNAME,
-      process.env.SALESFORCE_PASSWORD + process.env.SALESFORCE_SECURITY_TOKEN
-    );
 
     switch (action) {
       case 'getLeads':
