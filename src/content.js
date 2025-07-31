@@ -450,6 +450,8 @@ class ContentScript {
                 `;
             }
 
+            console.log(`TalkPilot: Calling ${provider} API at ${this.apiBaseUrl}/crm/${provider}`);
+            
             // Call real CRM API
             const response = await fetch(`${this.apiBaseUrl}/crm/${provider}`, {
                 method: 'POST',
@@ -460,6 +462,8 @@ class ContentScript {
                     action: provider === 'salesforce' ? 'getLeads' : 'getContacts'
                 })
             });
+
+            console.log(`TalkPilot: ${provider} API response status:`, response.status);
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
