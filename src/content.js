@@ -136,13 +136,18 @@ class ContentScript {
                         <label style="display: block; margin-bottom: 4px; font-weight: 500; color: #333;">Password:</label>
                         <input type="password" id="talkpilot-password" placeholder="Enter password" required style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
                     </div>
-                    <button type="submit" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Sign In</button>
+                    <button type="submit" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">Sign In</button>
+                    <button type="button" id="talkpilot-signup-btn" style="width: 100%; background: #f8f9fa; color: #666; border: 1px solid #ddd; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Create Account</button>
                 </form>
             `;
 
             document.getElementById('talkpilot-login-form').addEventListener('submit', (e) => {
                 e.preventDefault();
                 this.handleLogin();
+            });
+
+            document.getElementById('talkpilot-signup-btn').addEventListener('click', () => {
+                this.showSignUpForm();
             });
         }
     }
@@ -166,8 +171,7 @@ class ContentScript {
                 // Store auth token
                 chrome.storage.local.set({
                     authToken: result.token,
-                    userEmail: result.user.email,
-                    userName: result.user.name
+                    userEmail: result.user.email
                 }, () => {
                     this.showActivateButton();
                 });
@@ -177,6 +181,81 @@ class ContentScript {
         } catch (error) {
             console.error('Login error:', error);
             alert('Login failed. Please try again.');
+        }
+    }
+
+    showSignUpForm() {
+        const modalContent = document.querySelector('#talkpilot-url-modal > div');
+        if (modalContent) {
+            modalContent.innerHTML = `
+                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 24px;">📝</div>
+                <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600; color: #333;">Create Account</h2>
+                <p style="margin: 0 0 24px 0; font-size: 16px; color: #666; line-height: 1.5;">Enter your details to create a new account</p>
+                
+                <form id="talkpilot-signup-form" style="text-align: left;">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 4px; font-weight: 500; color: #333;">Email:</label>
+                        <input type="email" id="talkpilot-signup-email" placeholder="your@email.com" required style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 4px; font-weight: 500; color: #333;">Password:</label>
+                        <input type="password" id="talkpilot-signup-password" placeholder="Enter password" required style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 24px;">
+                        <label style="display: block; margin-bottom: 4px; font-weight: 500; color: #333;">Confirm Password:</label>
+                        <input type="password" id="talkpilot-signup-confirm-password" placeholder="Confirm password" required style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+                    </div>
+                    <button type="submit" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">Create Account</button>
+                    <button type="button" id="talkpilot-back-to-login" style="width: 100%; background: #f8f9fa; color: #666; border: 1px solid #ddd; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">Back to Sign In</button>
+                </form>
+            `;
+
+            document.getElementById('talkpilot-signup-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleSignUp();
+            });
+
+            document.getElementById('talkpilot-back-to-login').addEventListener('click', () => {
+                this.showLoginForm();
+            });
+        }
+    }
+
+    async handleSignUp() {
+        const email = document.getElementById('talkpilot-signup-email').value;
+        const password = document.getElementById('talkpilot-signup-password').value;
+        const confirmPassword = document.getElementById('talkpilot-signup-confirm-password').value;
+
+        if (password !== confirmPassword) {
+            alert('Passwords do not match');
+            return;
+        }
+
+        if (password.length < 6) {
+            alert('Password must be at least 6 characters long');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert('Account created successfully! Please sign in.');
+                this.showLoginForm();
+            } else {
+                alert('Registration failed: ' + result.error);
+            }
+        } catch (error) {
+            console.error('Sign up error:', error);
+            alert('Registration failed. Please try again.');
         }
     }
 

@@ -13,6 +13,7 @@
     "@deepgram/sdk": "^2.4.0",
     "ws": "^8.14.0",
     "mongodb": "^6.3.0",
+    "bcryptjs": "^2.4.3",
     "@sendgrid/mail": "^8.0.0",
     "jsforce": "^1.11.1",
     "@hubspot/api-client": "^9.0.0",
