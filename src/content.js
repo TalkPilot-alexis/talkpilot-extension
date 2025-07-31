@@ -21,7 +21,46 @@ class ContentScript {
 
     init() {
         this.checkURLAndShowModal();
+        this.setupMessageListener();
         console.log('TalkPilot Extension: Initialized on', window.location.href);
+    }
+
+    setupMessageListener() {
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.action === 'openTalkPilotPanel') {
+                this.openTalkPilotPanel();
+            }
+        });
+    }
+
+    openTalkPilotPanel() {
+        // Check if user is authenticated
+        chrome.storage.local.get(['authToken', 'isGuest'], (result) => {
+            if (result.authToken || result.isGuest) {
+                // If panel is not already shown, show it
+                const existingPanel = document.getElementById('talkpilot-incall-panel');
+                if (!existingPanel) {
+                    this.showTalkPilotPanel();
+                }
+            } else {
+                // Show sign-in modal
+                this.showURLRecognitionModal();
+            }
+        });
+    }
+
+    showTalkPilotPanel() {
+        // Get stored context or create default
+        chrome.storage.local.get(['meetingWith', 'callGoal', 'tone', 'extraNotes', 'selectedPlaybook'], (result) => {
+            const context = {
+                meetingWith: result.meetingWith || 'Prospect',
+                callGoal: result.callGoal || 'Discovery Call',
+                tone: result.tone || 'Professional',
+                selectedPlaybook: result.selectedPlaybook || 'meddic'
+            };
+            
+            this.showInCallPanel(context, this.getPlaybookSteps(context.selectedPlaybook));
+        });
     }
 
     checkURLAndShowModal() {
@@ -945,12 +984,16 @@ class ContentScript {
         
         panel.innerHTML = `
             <!-- Header -->
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; display: flex; align-items: center; gap: 12px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; display: flex; align-items: center; gap: 12px; position: relative;">
                 <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px;">🧠</div>
                 <div>
                     <div style="font-weight: 600; font-size: 16px;">TalkPilot</div>
                     <div style="font-size: 12px; opacity: 0.9;">AI Sales Assistant</div>
                 </div>
+                <!-- End Call Button (Top-Right) -->
+                <button id="talkpilot-end-call-small" style="position: absolute; top: 12px; right: 12px; background: rgba(255, 107, 107, 0.9); color: white; border: none; padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">
+                    📞 End
+                </button>
             </div>
 
             <!-- Call Information -->
@@ -1047,13 +1090,7 @@ class ContentScript {
                     </button>
                 </div>
                 
-                <!-- End Call Button -->
-                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
-                    <button id="talkpilot-end-call" style="width: 100%; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; border: none; padding: 14px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s ease;">
-                        <span style="font-size: 16px;">📞</span>
-                        End Call & Generate Summary
-                    </button>
-                </div>
+
             </div>
         `;
 
@@ -1148,10 +1185,10 @@ class ContentScript {
             });
         }
         
-        // End call button
-        const endCallButton = document.getElementById('talkpilot-end-call');
-        if (endCallButton) {
-            endCallButton.addEventListener('click', () => {
+        // Small end call button (top-right)
+        const endCallButtonSmall = document.getElementById('talkpilot-end-call-small');
+        if (endCallButtonSmall) {
+            endCallButtonSmall.addEventListener('click', () => {
                 this.endCall();
             });
         }
@@ -1330,10 +1367,22 @@ class ContentScript {
         try {
             console.log('TalkPilot: Starting real-time audio capture...');
             
+            // First, request microphone permissions explicitly
+            try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('TalkPilot: Microphone permission granted');
+            } catch (micError) {
+                console.error('TalkPilot: Microphone permission denied:', micError);
+                alert('Please allow microphone access to use TalkPilot transcription features.');
+                return;
+            }
+            
             // Request tab capture from background script
             const response = await chrome.runtime.sendMessage({ action: 'captureTab' });
             
             if (response.success && response.streamId) {
+                console.log('TalkPilot: Tab capture successful, streamId:', response.streamId);
+                
                 // Get the tab's audio stream
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
@@ -1344,6 +1393,8 @@ class ContentScript {
                     },
                     video: false
                 });
+                
+                console.log('TalkPilot: Got tab audio stream:', stream);
                 
                 this.audioContext = new AudioContext();
                 const source = this.audioContext.createMediaStreamSource(stream);
@@ -1368,10 +1419,12 @@ class ContentScript {
                 // Start real-time transcription
                 await this.startRealTimeTranscription();
             } else {
-                console.error('TalkPilot: Failed to get tab stream');
+                console.error('TalkPilot: Failed to get tab stream:', response.error);
+                alert('Failed to capture tab audio. Please make sure you\'re on a supported video call platform.');
             }
         } catch (error) {
             console.error('TalkPilot: Failed to start audio capture:', error);
+            alert('Error starting audio capture: ' + error.message);
         }
     }
 
@@ -1381,6 +1434,8 @@ class ContentScript {
             
             // Create WebSocket connection to our backend
             const wsUrl = this.apiBaseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/transcription/stream';
+            console.log('TalkPilot: Connecting to WebSocket URL:', wsUrl);
+            
             this.websocket = new WebSocket(wsUrl);
             
             this.websocket.onopen = () => {

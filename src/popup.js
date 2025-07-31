@@ -21,6 +21,7 @@ class PopupManager {
             const signinGoogleBtn = document.getElementById('signin-google');
             const signinMicrosoftBtn = document.getElementById('signin-microsoft');
             const guestBtn = document.getElementById('guest-btn');
+            const openPanelBtn = document.getElementById('open-panel-btn');
             const signoutBtn = document.getElementById('signout-btn');
             
             if (isSignedIn) {
@@ -38,6 +39,7 @@ class PopupManager {
                 signinGoogleBtn.style.display = 'none';
                 signinMicrosoftBtn.style.display = 'none';
                 guestBtn.style.display = 'none';
+                openPanelBtn.style.display = 'block';
                 signoutBtn.style.display = 'block';
             } else {
                 statusDiv.className = 'status signed-out';
@@ -68,6 +70,10 @@ class PopupManager {
         
         document.getElementById('signout-btn').addEventListener('click', () => {
             this.signOut();
+        });
+        
+        document.getElementById('open-panel-btn').addEventListener('click', () => {
+            this.openTalkPilotPanel();
         });
     }
 
@@ -162,6 +168,22 @@ class PopupManager {
             await this.checkAuthStatus();
         } catch (error) {
             alert('Sign-out error: ' + error.message);
+        }
+    }
+
+    async openTalkPilotPanel() {
+        try {
+            // Get the active tab
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            
+            // Send message to content script to open the panel
+            await chrome.tabs.sendMessage(tab.id, { action: 'openTalkPilotPanel' });
+            
+            // Close the popup
+            window.close();
+        } catch (error) {
+            console.error('Error opening TalkPilot panel:', error);
+            alert('Error opening panel: ' + error.message);
         }
     }
 }
