@@ -928,6 +928,14 @@ class ContentScript {
                         <span style="font-size: 14px;">✈️</span>
                     </button>
                 </div>
+                
+                <!-- End Call Button -->
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+                    <button id="talkpilot-end-call" style="width: 100%; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; border: none; padding: 14px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s ease;">
+                        <span style="font-size: 16px;">📞</span>
+                        End Call & Generate Summary
+                    </button>
+                </div>
             </div>
         `;
 
@@ -1019,6 +1027,14 @@ class ContentScript {
                     transcriptElement.innerHTML = '<div style="color: #666; font-style: italic;">Waiting for speech...</div>';
                 }
                 this.transcriptBuffer = '';
+            });
+        }
+        
+        // End call button
+        const endCallButton = document.getElementById('talkpilot-end-call');
+        if (endCallButton) {
+            endCallButton.addEventListener('click', () => {
+                this.endCall();
             });
         }
     }
@@ -1625,6 +1641,32 @@ class ContentScript {
         // Handle when an utterance is complete
         console.log('TalkPilot: Utterance complete:', transcript);
         // Could trigger specific actions based on utterance content
+    }
+
+    async endCall() {
+        console.log('TalkPilot: Ending call and generating summary...');
+        
+        // Show loading state on the button
+        const endCallButton = document.getElementById('talkpilot-end-call');
+        if (endCallButton) {
+            endCallButton.innerHTML = '<span style="font-size: 16px;">⏳</span> Generating Summary...';
+            endCallButton.disabled = true;
+            endCallButton.style.opacity = '0.7';
+        }
+        
+        try {
+            // Trigger the post-call flow
+            await this.deactivateExtension();
+        } catch (error) {
+            console.error('TalkPilot: Error ending call:', error);
+            
+            // Reset button state on error
+            if (endCallButton) {
+                endCallButton.innerHTML = '<span style="font-size: 16px;">📞</span> End Call & Generate Summary';
+                endCallButton.disabled = false;
+                endCallButton.style.opacity = '1';
+            }
+        }
     }
 
     createFloatingButton() {

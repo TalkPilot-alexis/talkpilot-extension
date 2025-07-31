@@ -366,3 +366,15 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     animation: slideInUp 0.3s ease-out;
 }
+
+/* End call button styles */
+#talkpilot-end-call:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+#talkpilot-end-call:disabled {
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
