@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "TalkPilot AI Sales Assistant",
+  "version": "1.0.0",
+  "description": "AI-powered sales assistant for video calls with CRM integration",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "identity",
+    "scripting",
+    "tabCapture"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "TalkPilot"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "css": ["src/styles.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "oauth2": {
+    "client_id": "373839371418-gg5bsl8diom6m0b4q6kkv65p8i31f2vj.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
+    ]
+  },
+  "externally_connectable": {
+    "matches": ["https://*.vercel.app/*"]
+  }
+}
