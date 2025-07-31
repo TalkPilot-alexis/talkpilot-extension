@@ -11,6 +11,11 @@ class ContentScript {
         this.audioChunks = [];
         this.transcriptBuffer = '';
         this.apiBaseUrl = 'https://talkpilot-extension-uc6a.vercel.app/api';
+        this.websocket = null;
+        this.isTranscribing = false;
+        this.currentSpeaker = null;
+        this.speakers = new Map();
+        this.isSpeaking = false;
         this.init();
     }
 
@@ -844,6 +849,16 @@ class ContentScript {
                     <span style="font-size: 12px; font-weight: 500; color: #4CAF50;">Live Call Active</span>
                     <span id="talkpilot-timer" style="font-size: 12px; color: #666; margin-left: auto;">00:00</span>
                 </div>
+                
+                <!-- Real-time Indicators -->
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
+                    <div id="talkpilot-vad-indicator" class="vad-inactive" style="display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 8px; border-radius: 12px; background: #f0f0f0; color: #666;">
+                        <span>🔇</span> <span>Silent</span>
+                    </div>
+                    <div id="talkpilot-current-speaker" style="display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 8px; border-radius: 12px; background: #e3f2fd; color: #1976d2;">
+                        <span>👤</span> <span>Waiting...</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Talking Points -->
@@ -866,6 +881,17 @@ class ContentScript {
                             <button class="talkpilot-add-note" style="background: none; border: none; color: #667eea; font-size: 11px; cursor: pointer; padding: 0;">+ Note</button>
                         </div>
                     `).join('')}
+                </div>
+                
+                <!-- Real-time Transcript -->
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h4 style="margin: 0; font-size: 13px; font-weight: 600; color: #333;">LIVE TRANSCRIPT</h4>
+                        <button id="talkpilot-clear-transcript" style="background: none; border: none; color: #667eea; font-size: 11px; cursor: pointer; padding: 0;">Clear</button>
+                    </div>
+                    <div id="talkpilot-transcript" style="background: #f8f9fa; border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto; font-size: 12px; line-height: 1.4; color: #333; font-family: 'Monaco', 'Menlo', monospace;">
+                        <div style="color: #666; font-style: italic;">Waiting for speech...</div>
+                    </div>
                 </div>
             </div>
 
@@ -983,6 +1009,18 @@ class ContentScript {
         closeInsight.addEventListener('click', () => this.hideAIInsight());
         gotIt.addEventListener('click', () => this.hideAIInsight());
         later.addEventListener('click', () => this.hideAIInsight());
+        
+        // Clear transcript button
+        const clearTranscript = document.getElementById('talkpilot-clear-transcript');
+        if (clearTranscript) {
+            clearTranscript.addEventListener('click', () => {
+                const transcriptElement = document.getElementById('talkpilot-transcript');
+                if (transcriptElement) {
+                    transcriptElement.innerHTML = '<div style="color: #666; font-style: italic;">Waiting for speech...</div>';
+                }
+                this.transcriptBuffer = '';
+            });
+        }
     }
 
     startCallTimer() {
@@ -1188,10 +1226,13 @@ class ContentScript {
                     this.processAudioChunk(inputData);
                 };
                 
+                this.audioProcessor = processor;
+                this.audioSource = source;
+                
                 console.log('TalkPilot: Real-time audio capture started successfully');
                 
                 // Start real-time transcription
-                this.startRealTimeTranscription();
+                await this.startRealTimeTranscription();
             } else {
                 console.error('TalkPilot: Failed to get tab stream');
             }
@@ -1200,29 +1241,99 @@ class ContentScript {
         }
     }
 
-    startRealTimeTranscription() {
-        // Send audio chunks to Deepgram every 2 seconds for real-time transcription
-        setInterval(async () => {
-            if (this.audioChunks.length > 0) {
-                await this.transcribeAudio();
-            }
-        }, 2000);
+    async startRealTimeTranscription() {
+        try {
+            console.log('TalkPilot: Starting real-time transcription...');
+            
+            // Create WebSocket connection to our backend
+            const wsUrl = this.apiBaseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/transcription/stream';
+            this.websocket = new WebSocket(wsUrl);
+            
+            this.websocket.onopen = () => {
+                console.log('TalkPilot: WebSocket connected for real-time transcription');
+                this.isTranscribing = true;
+            };
+
+            this.websocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    switch (data.type) {
+                        case 'connected':
+                            console.log('TalkPilot: Deepgram connected:', data.message);
+                            break;
+                            
+                        case 'transcript':
+                            this.handleTranscript(data);
+                            break;
+                            
+                        case 'speakers':
+                            this.handleSpeakerDiarization(data);
+                            break;
+                            
+                        case 'vad':
+                            this.handleVoiceActivityDetection(data);
+                            break;
+                            
+                        case 'utterance':
+                            this.handleUtteranceDetection(data);
+                            break;
+                            
+                        case 'error':
+                            console.error('TalkPilot: Deepgram error:', data.error);
+                            break;
+                            
+                        case 'closed':
+                            console.log('TalkPilot: Deepgram connection closed');
+                            this.isTranscribing = false;
+                            break;
+                    }
+                } catch (error) {
+                    console.error('TalkPilot: Error parsing WebSocket message:', error);
+                }
+            };
+
+            this.websocket.onerror = (error) => {
+                console.error('TalkPilot: WebSocket error:', error);
+                this.isTranscribing = false;
+            };
+
+            this.websocket.onclose = () => {
+                console.log('TalkPilot: WebSocket closed');
+                this.isTranscribing = false;
+            };
+            
+        } catch (error) {
+            console.error('TalkPilot: Failed to start real-time transcription:', error);
+        }
     }
 
     processAudioChunk(audioData) {
-        // Convert audio data to base64
-        const audioBuffer = this.audioContext.createBuffer(1, audioData.length, 44100);
-        audioBuffer.getChannelData(0).set(audioData);
+        // Convert audio data to 16-bit PCM
+        const pcmData = new Int16Array(audioData.length);
+        for (let i = 0; i < audioData.length; i++) {
+            pcmData[i] = Math.max(-32768, Math.min(32767, audioData[i] * 32768));
+        }
         
-        // Convert to WAV format (simplified)
-        const wavData = this.audioBufferToWav(audioBuffer);
-        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(wavData)));
+        // Send audio data to WebSocket if connected
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN && this.isTranscribing) {
+            try {
+                const audioBuffer = Buffer.from(pcmData.buffer);
+                this.websocket.send(JSON.stringify({
+                    type: 'audio',
+                    audioData: audioBuffer.toString('base64')
+                }));
+            } catch (error) {
+                console.error('TalkPilot: Error sending audio data:', error);
+            }
+        }
         
-        this.audioChunks.push(base64Audio);
+        // Store audio chunk for backup
+        this.audioChunks.push(pcmData);
         
-        // Send for transcription every 10 seconds
-        if (this.audioChunks.length >= 10) {
-            this.transcribeAudio();
+        // Keep only last 10 chunks to prevent memory issues
+        if (this.audioChunks.length > 10) {
+            this.audioChunks.shift();
         }
     }
 
@@ -1398,13 +1509,122 @@ class ContentScript {
         }
     }
 
-    updateTranscriptDisplay(newTranscript) {
+    handleTranscript(data) {
+        const { transcript, isFinal, confidence } = data;
+        
+        if (transcript) {
+            // Update transcript buffer
+            if (isFinal) {
+                this.transcriptBuffer += transcript + ' ';
+                // Analyze conversation when we have final results
+                this.analyzeConversation(transcript);
+            }
+            
+            // Update display in real-time
+            this.updateTranscriptDisplay(transcript, isFinal, confidence);
+        }
+    }
+
+    handleSpeakerDiarization(data) {
+        const { speakers, isFinal } = data;
+        
+        if (speakers && speakers.length > 0) {
+            // Update speaker information
+            speakers.forEach(word => {
+                if (word.speaker !== undefined) {
+                    this.speakers.set(word.speaker, {
+                        lastSeen: Date.now(),
+                        words: (this.speakers.get(word.speaker)?.words || 0) + 1
+                    });
+                    
+                    if (isFinal) {
+                        this.currentSpeaker = word.speaker;
+                        this.updateSpeakerDisplay(word.speaker);
+                    }
+                }
+            });
+        }
+    }
+
+    handleVoiceActivityDetection(data) {
+        const { isSpeaking } = data;
+        this.isSpeaking = isSpeaking;
+        
+        // Update UI to show voice activity
+        this.updateVoiceActivityDisplay(isSpeaking);
+        
+        // If speech ended, trigger analysis
+        if (!isSpeaking && this.transcriptBuffer.trim()) {
+            console.log('TalkPilot: Speech ended, analyzing conversation...');
+        }
+    }
+
+    handleUtteranceDetection(data) {
+        const { utterance } = data;
+        console.log('TalkPilot: New utterance detected:', utterance);
+        
+        // Could trigger specific analysis or actions based on utterance
+        if (utterance && utterance.transcript) {
+            this.handleUtteranceComplete(utterance.transcript);
+        }
+    }
+
+    updateTranscriptDisplay(transcript, isFinal = false, confidence = null) {
         // Update the transcript display in the in-call panel
         const transcriptElement = document.getElementById('talkpilot-transcript');
         if (transcriptElement) {
-            transcriptElement.textContent += ' ' + newTranscript;
+            if (isFinal) {
+                // Add final transcript
+                const finalSpan = document.createElement('span');
+                finalSpan.className = 'final-transcript';
+                finalSpan.textContent = transcript + ' ';
+                transcriptElement.appendChild(finalSpan);
+            } else {
+                // Update interim transcript
+                let interimSpan = transcriptElement.querySelector('.interim-transcript');
+                if (!interimSpan) {
+                    interimSpan = document.createElement('span');
+                    interimSpan.className = 'interim-transcript';
+                    transcriptElement.appendChild(interimSpan);
+                }
+                interimSpan.textContent = transcript;
+            }
+            
             transcriptElement.scrollTop = transcriptElement.scrollHeight;
         }
+    }
+
+    updateSpeakerDisplay(speakerId) {
+        const speakerElement = document.getElementById('talkpilot-current-speaker');
+        if (speakerElement) {
+            const speakerName = this.getSpeakerName(speakerId);
+            speakerElement.textContent = `Speaker ${speakerName}`;
+            speakerElement.className = `speaker-${speakerId}`;
+        }
+    }
+
+    updateVoiceActivityDisplay(isSpeaking) {
+        const vadElement = document.getElementById('talkpilot-vad-indicator');
+        if (vadElement) {
+            vadElement.className = isSpeaking ? 'vad-active' : 'vad-inactive';
+            vadElement.textContent = isSpeaking ? '🎤 Speaking' : '🔇 Silent';
+        }
+    }
+
+    getSpeakerName(speakerId) {
+        // Map speaker IDs to names (you can customize this)
+        const speakerNames = {
+            0: 'You',
+            1: 'Prospect',
+            2: 'Colleague'
+        };
+        return speakerNames[speakerId] || `Speaker ${speakerId}`;
+    }
+
+    handleUtteranceComplete(transcript) {
+        // Handle when an utterance is complete
+        console.log('TalkPilot: Utterance complete:', transcript);
+        // Could trigger specific actions based on utterance content
     }
 
     createFloatingButton() {
@@ -1665,7 +1885,25 @@ class ContentScript {
         // Show post-call summary modal
         await this.showPostCallModal();
         
+        // Clean up WebSocket connection
+        if (this.websocket) {
+            this.websocket.send(JSON.stringify({ type: 'close' }));
+            this.websocket.close();
+            this.websocket = null;
+            this.isTranscribing = false;
+        }
+        
         // Clean up audio capture
+        if (this.audioProcessor) {
+            this.audioProcessor.disconnect();
+            this.audioProcessor = null;
+        }
+        
+        if (this.audioSource) {
+            this.audioSource.disconnect();
+            this.audioSource = null;
+        }
+        
         if (this.audioContext) {
             await this.audioContext.close();
             this.audioContext = null;
@@ -1709,6 +1947,13 @@ class ContentScript {
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
         }
+        
+        // Reset transcription state
+        this.transcriptBuffer = '';
+        this.audioChunks = [];
+        this.speakers.clear();
+        this.currentSpeaker = null;
+        this.isSpeaking = false;
     }
 
     async showPostCallModal() {
