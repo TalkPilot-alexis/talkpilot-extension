@@ -10,7 +10,7 @@ class ContentScript {
         this.mediaRecorder = null;
         this.audioChunks = [];
         this.transcriptBuffer = '';
-        this.apiBaseUrl = 'https://talkpilot-extension-awevyi465-talksenseai-3248s-projects.vercel.app/api';
+        this.apiBaseUrl = 'https://talkpilot-extension-uc6a-5eijk63oi-talksenseai-3248s-projects.vercel.app/api';
         this.init();
     }
 
