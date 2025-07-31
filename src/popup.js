@@ -73,30 +73,73 @@ class PopupManager {
 
     async signIn(provider) {
         try {
-            // Simulate successful sign-in for now
-            const mockUserData = {
-                google: {
-                    email: 'user@gmail.com',
-                    name: 'Google User'
-                },
-                microsoft: {
-                    email: 'user@outlook.com', 
-                    name: 'Microsoft User'
-                }
-            };
-            
-            const userData = mockUserData[provider];
-            
-            await chrome.storage.local.set({
-                authToken: `mock_${provider}_token`,
-                userEmail: userData.email,
-                userName: userData.name,
-                isGuest: false
-            });
-            
-            await this.checkAuthStatus();
+            if (provider === 'google') {
+                await this.handleGoogleSignIn();
+            } else if (provider === 'microsoft') {
+                // TODO: Implement Microsoft OAuth
+                alert('Microsoft sign-in not implemented yet');
+            }
         } catch (error) {
             alert('Sign-in error: ' + error.message);
+        }
+    }
+
+    async handleGoogleSignIn() {
+        try {
+            // Get OAuth URL
+            const authResponse = await fetch('https://talkpilot-extension-uc6a.vercel.app/api/auth/google/auth', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'getAuthUrl'
+                })
+            });
+
+            if (!authResponse.ok) {
+                throw new Error(`Failed to get auth URL: ${authResponse.status}`);
+            }
+
+            const authData = await authResponse.json();
+            
+            if (authData.success) {
+                // Open OAuth popup
+                const popup = window.open(
+                    authData.authUrl,
+                    'google_oauth',
+                    'width=600,height=700,scrollbars=yes,resizable=yes'
+                );
+
+                // Listen for OAuth completion
+                const checkPopup = setInterval(async () => {
+                    if (popup.closed) {
+                        clearInterval(checkPopup);
+                        
+                        // Check if we have tokens stored
+                        chrome.storage.local.get(['googleAccessToken', 'googleUserInfo'], async (result) => {
+                            if (result.googleAccessToken && result.googleUserInfo) {
+                                // Store user data
+                                await chrome.storage.local.set({
+                                    authToken: result.googleAccessToken,
+                                    userEmail: result.googleUserInfo.email,
+                                    userName: result.googleUserInfo.name,
+                                    isGuest: false
+                                });
+                                
+                                await this.checkAuthStatus();
+                            } else {
+                                alert('Google authentication was cancelled or failed');
+                            }
+                        });
+                    }
+                }, 1000);
+            } else {
+                throw new Error(authData.error || 'Failed to get auth URL');
+            }
+        } catch (error) {
+            console.error('Google sign-in error:', error);
+            alert('Google sign-in error: ' + error.message);
         }
     }
 

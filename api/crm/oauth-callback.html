@@ -56,14 +56,27 @@
                 <button onclick="window.close()" style="margin-top: 20px; padding: 10px 20px; background: white; color: #667eea; border: none; border-radius: 8px; cursor: pointer;">Close</button>
             `;
         } else if (code) {
-            // Determine which CRM this is for based on the URL
+            // Determine which provider this is for based on the URL
             const isHubSpot = window.location.pathname.includes('hubspot');
             const isSalesforce = window.location.pathname.includes('salesforce');
+            const isGoogle = window.location.pathname.includes('google');
             
-            const provider = isHubSpot ? 'hubspot' : isSalesforce ? 'salesforce' : 'unknown';
+            let provider = 'unknown';
+            let apiPath = '';
+            
+            if (isHubSpot) {
+                provider = 'hubspot';
+                apiPath = '/api/crm/hubspot/callback';
+            } else if (isSalesforce) {
+                provider = 'salesforce';
+                apiPath = '/api/crm/salesforce/callback';
+            } else if (isGoogle) {
+                provider = 'google';
+                apiPath = '/api/auth/google/callback';
+            }
             
             // Call the callback API
-            fetch(`/api/crm/${provider}/callback?code=${code}`, {
+            fetch(`${apiPath}?code=${code}`, {
                 method: 'GET'
             })
             .then(response => response.json())

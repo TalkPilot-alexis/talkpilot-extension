@@ -63,51 +63,11 @@ class BackgroundService {
 
   async handleOAuth(provider, sendResponse) {
     try {
-      if (provider === 'google') {
-        const token = await this.getGoogleAuthToken();
-        const userInfo = await this.getGoogleUserInfo(token);
-        
-        await chrome.storage.local.set({
-          authToken: token,
-          userEmail: userInfo.email,
-          userName: userInfo.name,
-          isGuest: false
-        });
-        
-        sendResponse({ success: true, userInfo });
-      } else if (provider === 'microsoft') {
-        // Implement Microsoft OAuth
-        sendResponse({ success: false, error: 'Microsoft OAuth not implemented yet' });
-      }
+      // OAuth is now handled by the popup directly
+      sendResponse({ success: false, error: 'OAuth is handled by the popup' });
     } catch (error) {
       sendResponse({ success: false, error: error.message });
     }
-  }
-
-  async getGoogleAuthToken() {
-    return new Promise((resolve, reject) => {
-      chrome.identity.getAuthToken({ interactive: true }, (token) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(token);
-        }
-      });
-    });
-  }
-
-  async getGoogleUserInfo(token) {
-    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to get user info');
-    }
-    
-    return await response.json();
   }
 
   async captureTab(sendResponse) {
