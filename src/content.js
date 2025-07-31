@@ -157,7 +157,7 @@ class ContentScript {
         const password = document.getElementById('talkpilot-password').value;
 
         try {
-            const response = await fetch(`${this.apiBaseUrl}/auth/login`, {
+            const response = await fetch(`${this.apiBaseUrl}/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -237,7 +237,7 @@ class ContentScript {
         }
 
         try {
-            const response = await fetch(`${this.apiBaseUrl}/auth/register`, {
+            const response = await fetch(`${this.apiBaseUrl}/register`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

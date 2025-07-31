@@ -127,7 +127,7 @@ class Popup {
                }
 
                try {
-                   const response = await fetch('https://talkpilot-extension-uc6a.vercel.app/api/auth/login', {
+                   const response = await fetch('https://talkpilot-extension-uc6a.vercel.app/api/login', {
                        method: 'POST',
                        headers: { 'Content-Type': 'application/json' },
                        body: JSON.stringify({ email, password })
@@ -172,7 +172,7 @@ class Popup {
                }
 
                try {
-                   const response = await fetch('https://talkpilot-extension-uc6a.vercel.app/api/auth/register', {
+                   const response = await fetch('https://talkpilot-extension-uc6a.vercel.app/api/register', {
                        method: 'POST',
                        headers: { 'Content-Type': 'application/json' },
                        body: JSON.stringify({ email, password })
