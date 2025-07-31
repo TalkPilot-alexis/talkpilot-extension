@@ -832,14 +832,14 @@ class ContentScript {
                 </div>
                 
                 <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Call Objectives:</label>
-                    <textarea id="talkpilot-objectives" placeholder="What do you want to achieve in this call?" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; min-height: 80px; resize: vertical; font-family: inherit; box-sizing: border-box;"></textarea>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Call Objectives: <span style="color: #999; font-weight: normal;">(Optional)</span></label>
+                    <textarea id="talkpilot-objectives" placeholder="What do you want to achieve in this call? (Optional)" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; min-height: 80px; resize: vertical; font-family: inherit; box-sizing: border-box;"></textarea>
                 </div>
                 
                 <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Type of Call:</label>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Type of Call: <span style="color: #999; font-weight: normal;">(Optional)</span></label>
                     <select id="talkpilot-call-type" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: white;">
-                        <option value="">Select call type...</option>
+                        <option value="">Select call type... (Optional)</option>
                         <option value="demo">Demo</option>
                         <option value="discovery">Discovery</option>
                         <option value="closing">Closing</option>
@@ -851,9 +851,9 @@ class ContentScript {
                 </div>
                 
                 <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Playbook:</label>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #333;">Playbook: <span style="color: #999; font-weight: normal;">(Optional)</span></label>
                     <select id="talkpilot-playbook" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: white;">
-                        <option value="">Select playbook...</option>
+                        <option value="">Select playbook... (Optional)</option>
                         <option value="meddic">MEDDIC</option>
                         <option value="spin">SPIN</option>
                         <option value="bant">BANT</option>
@@ -886,10 +886,8 @@ class ContentScript {
         const nextBtn = modal.querySelector('#talkpilot-context-next-btn');
 
         const validateFields = () => {
-            const isValid = durationSelect.value && 
-                           objectivesTextarea.value.trim() && 
-                           callTypeSelect.value && 
-                           playbookSelect.value;
+            // Only require duration and lead selection (lead is handled in CRM step)
+            const isValid = durationSelect.value;
             
             nextBtn.disabled = !isValid;
             nextBtn.style.opacity = isValid ? '1' : '0.5';
@@ -941,13 +939,117 @@ class ContentScript {
     }
 
     showPreCallIntelligenceModal() {
-        // Placeholder for Step 3: Pre-call Intelligence
-        // This will be implemented later
-        console.log('Step 3: Pre-call Intelligence Modal');
+        console.log('TalkPilot: Showing Step 3: Pre-call Intelligence Modal');
         
-        // For now, just activate the extension
+        // Remove existing modal if it exists
+        const existingModal = document.getElementById('talkpilot-intelligence-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'talkpilot-intelligence-modal';
+        
+        // Style the modal
+        Object.assign(modal.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: '1000000',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        });
+
+        // Create modal content
+        const modalContent = document.createElement('div');
+        Object.assign(modalContent.style, {
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            transform: 'scale(0.9)',
+            opacity: '0',
+            transition: 'all 0.3s ease'
+        });
+
+        modalContent.innerHTML = `
+            <div style="margin-bottom: 24px; text-align: center;">
+                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🧠</div>
+                <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600; color: #333;">Step 3: Pre-Call Intelligence</h2>
+                <p style="margin: 0; font-size: 16px; color: #666; line-height: 1.5;">AI-powered insights and preparation for your call.</p>
+            </div>
+            
+            <div style="margin-bottom: 24px;">
+                <div style="background: #f8f9fa; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #333;">🎯 Call Preparation</h3>
+                    <p style="margin: 0; font-size: 14px; color: #666;">TalkPilot will analyze your conversation in real-time and provide:</p>
+                    <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 14px; color: #666;">
+                        <li>Automatic playbook step tracking</li>
+                        <li>Proactive battle cards and insights</li>
+                        <li>Real-time conversation analysis</li>
+                        <li>AI-powered coaching suggestions</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #e8f5e8; border-radius: 8px; padding: 16px;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #2e7d32;">✅ Ready to Launch</h3>
+                    <p style="margin: 0; font-size: 14px; color: #2e7d32;">Your call is fully prepared with AI assistance!</p>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: center;">
+                <button id="talkpilot-launch-call" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 16px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+                    🚀 Launch TalkPilot Assistant
+                </button>
+            </div>
+        `;
+
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+
+        // Animate in
+        setTimeout(() => {
+            modalContent.style.transform = 'scale(1)';
+            modalContent.style.opacity = '1';
+        }, 100);
+
+        // Add event listener
+        const launchButton = modal.querySelector('#talkpilot-launch-call');
+        launchButton.addEventListener('click', () => {
+            this.launchTalkPilotAssistant();
+        });
+
+        // Close on background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeIntelligenceModal();
+            }
+        });
+    }
+
+    launchTalkPilotAssistant() {
+        console.log('TalkPilot: Launching assistant...');
+        
+        // Close the intelligence modal
+        this.closeIntelligenceModal();
+        
+        // Activate the extension
         this.isActive = true;
         this.activateExtension();
+    }
+
+    closeIntelligenceModal() {
+        const modal = document.getElementById('talkpilot-intelligence-modal');
+        if (modal) {
+            modal.remove();
+        }
     }
 
     showInCallPanel(context, playbookSteps) {
@@ -1474,6 +1576,15 @@ class ContentScript {
         try {
             console.log('TalkPilot: Starting real-time transcription...');
             
+            // For now, skip WebSocket and use local transcription simulation
+            console.log('TalkPilot: Using local transcription simulation (WebSocket disabled)');
+            this.isTranscribing = true;
+            
+            // Start local transcription simulation
+            this.startLocalTranscription();
+            
+            // TODO: Re-enable WebSocket when backend is fixed
+            /*
             // Create WebSocket connection to our backend
             const wsUrl = this.apiBaseUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/transcription/stream';
             console.log('TalkPilot: Connecting to WebSocket URL:', wsUrl);
@@ -1484,6 +1595,7 @@ class ContentScript {
                 console.log('TalkPilot: WebSocket connected for real-time transcription');
                 this.isTranscribing = true;
             };
+            */
 
             this.websocket.onmessage = (event) => {
                 try {
@@ -1571,6 +1683,35 @@ class ContentScript {
         if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
             this.simulateTranscriptionForTesting();
         }
+    }
+
+    startLocalTranscription() {
+        console.log('TalkPilot: Starting local transcription simulation...');
+        
+        // Simulate transcription every 3-5 seconds
+        this.localTranscriptionInterval = setInterval(() => {
+            if (this.isTranscribing && this.isActive) {
+                const phrases = [
+                    "Hello, how are you today?",
+                    "I'd like to discuss our solution.",
+                    "What are your current challenges?",
+                    "Let me show you how this works.",
+                    "What's your timeline for implementation?",
+                    "Who else needs to be involved in the decision?",
+                    "What's your budget for this project?",
+                    "How does this compare to your current process?",
+                    "What would success look like for you?",
+                    "Are there any concerns I should address?"
+                ];
+                
+                const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+                this.handleTranscript({
+                    transcript: randomPhrase,
+                    isFinal: true,
+                    confidence: 0.95
+                });
+            }
+        }, 3000 + Math.random() * 2000); // Random interval between 3-5 seconds
     }
 
     simulateTranscriptionForTesting() {
@@ -2175,6 +2316,12 @@ class ContentScript {
             this.websocket.close();
             this.websocket = null;
             this.isTranscribing = false;
+        }
+        
+        // Clean up local transcription interval
+        if (this.localTranscriptionInterval) {
+            clearInterval(this.localTranscriptionInterval);
+            this.localTranscriptionInterval = null;
         }
         
         // Clean up audio capture
