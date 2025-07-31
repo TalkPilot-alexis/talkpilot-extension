@@ -1090,32 +1090,57 @@ class ContentScript {
 
     async startAudioCapture() {
         try {
+            console.log('TalkPilot: Starting real-time audio capture...');
+            
             // Request tab capture from background script
             const response = await chrome.runtime.sendMessage({ action: 'captureTab' });
             
-            if (response.success) {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: true, 
-                    video: false 
+            if (response.success && response.streamId) {
+                // Get the tab's audio stream
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        mandatory: {
+                            chromeMediaSource: 'tab',
+                            chromeMediaSourceId: response.streamId
+                        }
+                    },
+                    video: false
                 });
                 
                 this.audioContext = new AudioContext();
                 const source = this.audioContext.createMediaStreamSource(stream);
+                
+                // Create a real-time audio processor
                 const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
                 
                 source.connect(processor);
                 processor.connect(this.audioContext.destination);
                 
+                // Process audio in real-time
                 processor.onaudioprocess = (e) => {
                     const inputData = e.inputBuffer.getChannelData(0);
                     this.processAudioChunk(inputData);
                 };
                 
-                console.log('Audio capture started successfully');
+                console.log('TalkPilot: Real-time audio capture started successfully');
+                
+                // Start real-time transcription
+                this.startRealTimeTranscription();
+            } else {
+                console.error('TalkPilot: Failed to get tab stream');
             }
         } catch (error) {
-            console.error('Failed to start audio capture:', error);
+            console.error('TalkPilot: Failed to start audio capture:', error);
         }
+    }
+
+    startRealTimeTranscription() {
+        // Send audio chunks to Deepgram every 2 seconds for real-time transcription
+        setInterval(async () => {
+            if (this.audioChunks.length > 0) {
+                await this.transcribeAudio();
+            }
+        }, 2000);
     }
 
     processAudioChunk(audioData) {
@@ -1177,6 +1202,8 @@ class ContentScript {
         if (this.audioChunks.length === 0) return;
         
         try {
+            console.log('TalkPilot: Sending audio to Deepgram for real-time transcription...');
+            
             // Combine audio chunks
             const combinedAudio = this.audioChunks.join('');
             this.audioChunks = []; // Clear chunks
